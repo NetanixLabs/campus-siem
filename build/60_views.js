@@ -796,9 +796,9 @@ async function runAlert(id, silent){
   renderAlerts();
 
   if(!silent){
-    if(a.email && emailSent)      showToast(`Alert fired — email sent via <b>${esc(via)}</b>`);
-    else if(a.email && !emailSent && via === 'mailto') showToast('Alert fired — mail client opened (no relay configured)', 'info');
-    else if(a.email && !emailSent) showToast('Alert fired but email failed: ' + esc(emailError), 'err');
+    if(a.email && emailSent)      showToast(`Alert fired — incident dispatched to <b>${esc(MAIL.to)}</b>`);
+    else if(a.email && !emailSent && via === 'mailto') showToast('Alert fired — notification handed to your mail client', 'info');
+    else if(a.email && !emailSent) showToast('Alert fired but dispatch failed: ' + esc(emailError), 'err');
     else                           showToast(`Alert fired — ticket ${esc(ticketId || '')} created`);
   }
   return a;
@@ -914,10 +914,7 @@ function openNotifyModal(panel, row, rowId){
   $('modalSubject').value = incident.subject;
   $('modalPriority').value = ['high','medium','low'].indexOf(priority) !== -1 ? priority : 'medium';
   $('modalBody').value = incident.text;
-  setStatus('modalStatus', mailConfigured()
-    ? `Sending for real via <b>${esc(MAIL.provider)}</b>.`
-    : 'No relay configured — this will open your mail client instead. Set one up under <b>Settings → Email Delivery</b> to send automatically.',
-    mailConfigured() ? 'ok' : 'info');
+  setStatus('modalStatus', '');
   openModal('notifyModal');
   runFlowAnimation(['trigger','build']);
 }
@@ -971,9 +968,9 @@ async function sendEmailAndTicket(){
 
   const btn = $('btnSendEmail');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span>Sending…';
+  btn.innerHTML = '<span class="spin"></span>Dispatching…';
   runFlowAnimation(['trigger','build','email']);
-  setStatus('modalStatus','Contacting mail relay…','info');
+  setStatus('modalStatus','Dispatching incident notification…','info');
 
   // If the analyst edited the body, the stored HTML no longer matches it —
   // fall back to text-only rather than mailing something they did not approve.
@@ -987,7 +984,7 @@ async function sendEmailAndTicket(){
     meta: { panel: currentRowContext.panel, row: currentRowContext.row }
   });
 
-  btn.disabled = false; btn.textContent = 'Send Email';
+  btn.disabled = false; btn.textContent = 'Dispatch & Ticket';
 
   if(r.sent){
     runFlowAnimation(['trigger','build','email','ticket']);
@@ -996,8 +993,8 @@ async function sendEmailAndTicket(){
       priority: $('modalPriority').value, status:'sent', sentTo: to
     });
     pushNotification(currentRowContext.panel, `Email sent to ${to} · ticket ${t.id}`, null);
-    setStatus('modalStatus', `Email delivered via <b>${esc(r.via)}</b>. Ticket <b>${esc(t.id)}</b> opened.`, 'ok');
-    showToast(`Email sent via <b>${esc(r.via)}</b> · ticket ${esc(t.id)}`);
+    setStatus('modalStatus', `Incident dispatched to <b>${esc(to)}</b>. Ticket <b>${esc(t.id)}</b> opened.`, 'ok');
+    showToast(`Incident dispatched · ticket ${esc(t.id)}`);
     if(currentRowContext.alertId) recordAlertFire(currentRowContext, true, r.via, '');
     setTimeout(() => closeNotifyModal(true), 1400);
   }else if(r.via === 'mailto'){
@@ -1005,14 +1002,14 @@ async function sendEmailAndTicket(){
       panel: currentRowContext.panel, row: currentRowContext.row, rowId: currentRowContext.rowId,
       priority: $('modalPriority').value, status:'open', sentTo: to
     });
-    setStatus('modalStatus', `Mail client opened. Ticket <b>${esc(t.id)}</b> logged. Configure a relay under <b>Settings</b> to send without leaving the page.`, 'info');
+    setStatus('modalStatus', `Ticket <b>${esc(t.id)}</b> logged. The notification was handed to your mail client.`, 'info');
     if(currentRowContext.alertId) recordAlertFire(currentRowContext, false, 'mailto', '');
     setTimeout(closeNotifyModal, 1400);
   }else{
     $('flowNode-email').classList.remove('active','done');
     $('flowNode-email').classList.add('fail');
-    setStatus('modalStatus', `Could not send: ${esc(r.error)}`, 'err');
-    showToast('Email failed — see the message in the dialog', 'err');
+    setStatus('modalStatus', `Dispatch failed: ${esc(r.error)}`, 'err');
+    showToast('Notification dispatch failed — see the dialog', 'err');
     if(currentRowContext.alertId) recordAlertFire(currentRowContext, false, 'error', r.error);
   }
 }
@@ -1065,33 +1062,33 @@ function saveMailSettings(){
   $('cfgCcEmail').value = MAIL.cc;
   $('cfgPriority').value = MAIL.priority;
   $('alertEmailState').innerHTML = mailStateLabel();
-  setStatus('setStatus', `Saved. Incident mail will be delivered to <b>${esc(MAIL.to)}</b> via Resend.`, 'ok');
+  setStatus('setStatus', `Saved. Incidents will be dispatched to <b>${esc(MAIL.to)}</b>.`, 'ok');
   return true;
 }
 
 async function sendTestEmail(){
   if(!saveMailSettings()) return;
   const btn = $('btnTestMail');
-  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…';
-  setStatus('setStatus','Contacting mail relay…','info');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Dispatching…';
+  setStatus('setStatus','Dispatching test notification…','info');
   // Send the real report shape, not a bare "hello" — the point of the test is
   // to show exactly what a live alert will look like in the inbox.
   const incident = buildIncident({
-    source: 'Delivery self-test',
+    source: 'Notification channel self-test',
     severity: 'low',
-    fields: { alert:'Delivery self-test', provider: MAIL.provider, recipient: MAIL.to },
-    summary: `This is a delivery self-test from ${ORG.system}. It was sent through the ` +
-             `${MAIL.provider} relay to confirm that live incident notifications reach this mailbox. ` +
-             `No action is required — the layout below is what a real alert will look like.`
+    fields: { alert:'Notification channel self-test', recipient: MAIL.to },
+    summary: `Channel self-test issued by ${ORG.system} to confirm that incident notifications ` +
+             `reach this recipient. No action is required — the layout below is what a live ` +
+             `incident notification will look like.`
   });
   const r = await sendMail({
     to: MAIL.to, subject: incident.subject, body: incident.text,
     html: incident.html, priority: 'low', meta: { test:true }
   });
-  btn.disabled = false; btn.textContent = 'Send Test Email';
-  if(r.sent)                setStatus('setStatus', `Test email sent via <b>${esc(r.via)}</b>. Check the inbox registered with your ${esc(MAIL.provider)} endpoint.`, 'ok');
-  else if(r.via === 'mailto') setStatus('setStatus','No relay selected, so your mail client was opened with the test message.','info');
-  else                      setStatus('setStatus', `Test failed: ${esc(r.error)}`, 'err');
+  btn.disabled = false; btn.textContent = 'Send Test Notification';
+  if(r.sent)                  setStatus('setStatus', `Test notification dispatched to <b>${esc(MAIL.to)}</b>.`, 'ok');
+  else if(r.via === 'mailto') setStatus('setStatus','Test notification handed to your mail client.','info');
+  else                        setStatus('setStatus', `Dispatch failed: ${esc(r.error)}`, 'err');
 }
 
 /* saveNotifySettings() — the inline control on the dashboard panel */
@@ -1100,9 +1097,7 @@ function saveNotifySettings(){
   MAIL.cc = $('cfgCcEmail').value.trim();
   MAIL.priority = $('cfgPriority').value;
   Store.set('mail', MAIL);
-  showToast(mailConfigured()
-    ? 'Notification settings saved'
-    : 'Saved — set up a relay under <b>Settings</b> to send real email');
+  showToast('Notification settings saved');
 }
 
 function savePrefs(){

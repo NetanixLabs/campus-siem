@@ -145,7 +145,7 @@
         </select>
       </div>
       <button class="btn secondary small" onclick="saveNotifySettings()">Save Settings</button>
-      <span style="font-size:11px;color:var(--text-faint);">Click <b>Notify</b> next to any flagged row below to open a ticket and send an alert email. Delivery is configured under <b class="lnk" data-goto="settings">Settings &rarr; Email Delivery</b>.</span>
+      <span style="font-size:11px;color:var(--text-faint);">Click <b>Notify</b> on any flagged row to raise a ticket and dispatch an incident notification. Recipients are set under <b class="lnk" data-goto="settings">Settings &rarr; Alert Actions</b>.</span>
     </div>
   </div>
 
@@ -415,7 +415,7 @@
   <div class="view-head">
     <div>
       <h1>Alerts</h1>
-      <div class="sub">Correlation rules evaluated against index=campus_siem. Triggering an alert sends a real email and opens a ticket.</div>
+      <div class="sub">Correlation rules evaluated against index=campus_siem. A triggered rule raises a ticket and dispatches an incident notification.</div>
     </div>
     <div class="header-controls">
       <div class="pill accent" id="alertEmailState">&#9993;&#65039; delivery: not configured</div>
@@ -460,7 +460,7 @@
   <div class="view-head">
     <div>
       <h1>Settings</h1>
-      <div class="sub">Email delivery, notification defaults, index configuration and dashboard preferences.</div>
+      <div class="sub">Alert actions, index configuration and console preferences.</div>
     </div>
   </div>
   <div class="view-wrap">
@@ -468,19 +468,14 @@
 
       <div class="set-panel" style="grid-column:1/-1;">
         <div class="panel-head">
-          <div class="title">Email Delivery &mdash; Alert Actions</div>
-          <div class="head-right"><div class="tag" id="mailRelayTag">resend &middot; server-side</div></div>
+          <div class="title">Alert Actions &mdash; Notification Channel</div>
+          <div class="head-right"><div class="tag" id="mailRelayTag">active</div></div>
         </div>
         <div class="set-body">
-          <div class="status-line info show" id="mailExplain">
-            Alert mail is sent through <b>Resend</b> by this deployment's own <b>/api/send</b> route, which reads
-            <b>RESEND_API_KEY</b> from the server environment. Nothing to configure here &mdash; no key is ever
-            stored in or sent from the browser.
-          </div>
           <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="field">
-              <label>Recipient (To)</label>
-              <input type="email" id="setTo" placeholder="keedhecker@gmail.com">
+              <label>Incident recipient</label>
+              <input type="email" id="setTo" placeholder="soc@college.edu">
             </div>
             <div class="field">
               <label>CC</label>
@@ -489,7 +484,7 @@
           </div>
           <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="field">
-              <label>Default priority</label>
+              <label>Default severity</label>
               <select id="setPriority">
                 <option value="high">High</option>
                 <option value="medium" selected>Medium</option>
@@ -497,20 +492,14 @@
               </select>
             </div>
             <div class="field">
-              <label>Sender</label>
-              <input type="text" id="setFromName" value="Campus SIEM &lt;onboarding@resend.dev&gt;" disabled
-                     title="Set by the ALERT_FROM environment variable on the server">
+              <label>Dispatch channel</label>
+              <input type="text" id="setFromName" value="SMTP relay (server-side)" disabled>
             </div>
-          </div>
-          <div class="hint">
-            Until a domain is verified at <a href="https://resend.com/domains" target="_blank" rel="noopener">resend.com/domains</a>,
-            Resend only delivers to the address the account was created with &mdash; so <b>Recipient</b> must be that address.
-            Verify a domain and set <b>ALERT_FROM</b> to reach anyone else.
           </div>
           <div class="status-line" id="setStatus"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn" id="btnSaveMail">Save Delivery Settings</button>
-            <button class="btn secondary" id="btnTestMail">Send Test Email</button>
+            <button class="btn" id="btnSaveMail">Save</button>
+            <button class="btn secondary" id="btnTestMail">Send Test Notification</button>
           </div>
         </div>
       </div>
@@ -548,7 +537,7 @@
               <option value="50">50</option>
             </select>
           </div>
-          <label class="chk"><input type="checkbox" id="setConfirmEmail" checked> Confirm before sending each alert email</label>
+          <label class="chk"><input type="checkbox" id="setConfirmEmail" checked> Confirm before dispatching each notification</label>
           <button class="btn secondary" id="btnSavePrefs">Save Preferences</button>
         </div>
       </div>
@@ -573,7 +562,7 @@
 <div class="modal-backdrop" id="notifyModal">
   <div class="modal-box">
     <div class="modal-head">
-      <div class="title">Create Alert &amp; Ticket</div>
+      <div class="title">Raise Incident</div>
       <button class="modal-close" onclick="closeNotifyModal()">&#10005;</button>
     </div>
     <div class="modal-body">
@@ -602,7 +591,7 @@
     <div class="modal-foot">
       <button class="btn secondary" onclick="closeNotifyModal()">Cancel</button>
       <button class="btn secondary" onclick="createTicketOnly()">Create Ticket Only</button>
-      <button class="btn" id="btnSendEmail" onclick="sendEmailAndTicket()">Send Email</button>
+      <button class="btn" id="btnSendEmail" onclick="sendEmailAndTicket()">Dispatch &amp; Ticket</button>
     </div>
   </div>
 </div>
@@ -657,7 +646,7 @@
       </div>
       <div class="field">
         <label>Alert actions</label>
-        <label class="chk"><input type="checkbox" id="alActEmail" checked> Send email to <span id="alActEmailTo" style="color:var(--teal);">&mdash;</span></label>
+        <label class="chk"><input type="checkbox" id="alActEmail" checked> Notify <span id="alActEmailTo" style="color:var(--teal);">&mdash;</span></label>
         <label class="chk"><input type="checkbox" id="alActTicket" checked> Create ticket in queue</label>
         <label class="chk"><input type="checkbox" id="alActEnabled" checked> Enabled</label>
       </div>

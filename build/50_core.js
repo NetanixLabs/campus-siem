@@ -541,8 +541,8 @@ function mailConfigured(){
 
 function mailStateLabel(){
   return mailConfigured()
-    ? `&#9993; delivery: resend &rarr; ${esc(MAIL.to)}`
-    : '&#9993; delivery: not configured';
+    ? `&#9993; notify: ${esc(MAIL.to)}`
+    : '&#9993; notify: not configured';
 }
 
 function mailtoFallback(to, cc, subject, body){
