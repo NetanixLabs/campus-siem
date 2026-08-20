@@ -77,12 +77,12 @@ function roleQ(){ return SCOPE.role === 'all' ? '' : ' role=' + SCOPE.role; }
 function renderDashboard(){
   const { d, sampled } = scopedData();
 
-  $('kpiTotal').textContent = fmt(d.kpi.total_events);
-  $('kpiSuspicious').textContent = fmt(d.kpi.suspicious_events);
+  animateCount($('kpiTotal'), d.kpi.total_events);
+  animateCount($('kpiSuspicious'), d.kpi.suspicious_events);
   $('kpiSuspiciousPct').textContent = d.kpi.total_events
     ? (100*d.kpi.suspicious_events/d.kpi.total_events).toFixed(1) + '% of total events' : '— of total';
-  $('kpiStudents').textContent = fmt(d.kpi.unique_students);
-  $('kpiIps').textContent = fmt(d.kpi.unique_ips);
+  animateCount($('kpiStudents'), d.kpi.unique_students);
+  animateCount($('kpiIps'), d.kpi.unique_ips);
   $('kpiTotalDelta').textContent = `across ${d.days.length} day${d.days.length===1?'':'s'}` + (sampled ? ' · sampled estimate' : '');
   $('chipEvents').textContent = fmt(d.kpi.total_events);
   $('chipStudents').textContent = fmt(d.kpi.unique_students);
@@ -245,10 +245,14 @@ let SEARCH_DAYS = 11;
 function jobProgress(done){
   const bar = $('sbJobBar'), txt = $('sbJobText');
   if(!done){
+    bar.classList.add('running');
     bar.style.width = '0%'; txt.innerHTML = '<span class="spin"></span>scanning…';
-    setTimeout(() => bar.style.width = '62%', 40);
+    setTimeout(() => bar.style.width = '38%', 30);
+    setTimeout(() => bar.style.width = '71%', 150);
   }else{
-    bar.style.width = '100%'; txt.textContent = 'job complete';
+    bar.style.width = '100%';
+    txt.textContent = 'job complete';
+    setTimeout(() => bar.classList.remove('running'), 260);
   }
 }
 
@@ -259,6 +263,8 @@ function runSearch(){
 
   const dayFrom = DATA.days.length - SEARCH_DAYS;
   const scoped = SEARCH_DAYS === 11 ? EVENTS : EVENTS.filter(e => e.dayIdx >= dayFrom);
+  $('evList').innerHTML = skeletonRows(6);
+  $('evPager').innerHTML = '';
   const res = runSPL(q, { events: scoped });
 
   setTimeout(() => {
@@ -741,7 +747,18 @@ function alertIncident(a, ev){
 async function runAlert(id, silent){
   const a = ALERTS.find(x => x.id === id);
   if(!a) return null;
+
+  // mark the row as working before the (synchronous) evaluation so the
+  // analyst sees the rule actually run rather than the table just changing
+  const row = document.querySelector(`#tblAlerts button[onclick="runAlert('${a.id}')"]`);
+  const tr = row && row.closest('tr');
+  if(tr && !silent){
+    tr.classList.add('evaluating');
+    await new Promise(r => setTimeout(r, 420));
+  }
+
   const ev = evalAlert(a);
+  if(tr) tr.classList.remove('evaluating');
   if(!ev.ok){ showToast('Alert search failed: ' + esc(ev.error), 'err'); return null; }
   if(!ev.triggered){
     if(!silent) showToast(`<b>${esc(a.title)}</b> — ${fmt(ev.matches)} matches, below threshold. Not triggered.`, 'info');
@@ -792,8 +809,9 @@ async function runAlert(id, silent){
   saveAlerts();
   FIRED.unshift({ at:new Date().toLocaleString(), title:a.title, severity:a.severity, matches:ev.matches, spl:a.spl, emailSent, via, emailError, ticket:ticketId });
   FIRED = FIRED.slice(0,50); saveFired();
-  pushNotification(`${a.title}`, `${ev.matches} matches · severity ${a.severity}` + (emailSent ? ' · email sent' : ''), a.spl);
+  pushNotification(`${a.title}`, `${ev.matches} matches · severity ${a.severity}` + (emailSent ? ' · dispatched' : ''), a.spl);
   renderAlerts();
+  flashFirstRow('tblFired');
 
   if(!silent){
     if(a.email && emailSent)      showToast(`Alert fired — incident dispatched to <b>${esc(MAIL.to)}</b>`);
@@ -806,11 +824,16 @@ async function runAlert(id, silent){
 
 async function runAllAlerts(){
   const enabled = ALERTS.filter(a => a.enabled);
-  let fired = 0;
-  for(const a of enabled){
-    const r = await runAlert(a.id, true);
-    if(r) fired++;
-  }
+  let fired = 0, done = 0;
+  await withBusy($('btnRunAllAlerts'), 'Running…', async () => {
+    for(const a of enabled){
+      done++;
+      showToast(`Evaluating <b>${esc(a.title)}</b> &middot; ${done}/${enabled.length}`, 'info');
+      const r = await runAlert(a.id, true);
+      if(r) fired++;
+      await new Promise(r2 => setTimeout(r2, 260));
+    }
+  });
   renderAlerts();
   showToast(`Ran ${enabled.length} enabled rule${enabled.length===1?'':'s'} — <b>${fired}</b> triggered`, fired ? 'err' : 'info');
 }
@@ -832,6 +855,7 @@ function pushTicket(t){
   ticket.student = t.row.student_id || t.row.alert || t.row.role || '—';
   TICKETS.unshift(ticket);
   saveTickets(); renderTickets();
+  flashFirstRow('tblTickets');
   const btn = $('notifyBtn-' + t.rowId);
   if(btn){ btn.classList.add('ticketed'); btn.textContent = '✓ Ticketed'; }
   return ticket;
@@ -840,7 +864,7 @@ function pushTicket(t){
 function pushNotification(title, msg, spl){
   NOTES.unshift({ id:Date.now() + '-' + Math.random().toString(36).slice(2,6), title, msg, spl, at:new Date().toLocaleTimeString() });
   NOTES = NOTES.slice(0,30);
-  saveNotes(); renderBell();
+  saveNotes(); renderBell(); pulseBell();
 }
 
 function renderBell(){

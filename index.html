@@ -606,6 +606,87 @@
     .ev{grid-template-columns:1fr;gap:4px;}
     .modal-body .row2{grid-template-columns:1fr;}
   }
+
+  /* ============================================================
+     MOTION — feedback only. No layout, colour or spacing changes.
+     Everything here is opt-in via a class the JS adds.
+     ============================================================ */
+
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(6px);}  to{opacity:1;transform:none;} }
+  @keyframes popIn    { 0%{opacity:0;transform:scale(.96) translateY(-6px);} 100%{opacity:1;transform:none;} }
+  @keyframes rowFlash { 0%{background:rgba(255,106,26,.22);} 100%{background:transparent;} }
+  @keyframes badgePop { 0%{transform:scale(1);} 45%{transform:scale(1.45);} 100%{transform:scale(1);} }
+  @keyframes sweep    { 0%{background-position:0 0;} 100%{background-position:34px 0;} }
+  @keyframes shimmer  { 0%{background-position:-420px 0;} 100%{background-position:420px 0;} }
+  @keyframes ringPulse{ 0%{box-shadow:0 0 0 0 rgba(220,78,65,.45);} 70%{box-shadow:0 0 0 7px rgba(220,78,65,0);} 100%{box-shadow:0 0 0 0 rgba(220,78,65,0);} }
+
+  /* panels ease in when a view is shown, staggered by position */
+  .view.active .panel,
+  .view.active .kpi,
+  .view.active .set-panel{ animation:fadeUp .34s ease both; }
+  .view.active .kpi:nth-child(2){ animation-delay:.05s; }
+  .view.active .kpi:nth-child(3){ animation-delay:.10s; }
+  .view.active .kpi:nth-child(4){ animation-delay:.15s; }
+  .view.active .grid > .panel:nth-child(n+3){ animation-delay:.06s; }
+  .view.active .grid > .panel:nth-child(n+6){ animation-delay:.12s; }
+  @media (prefers-reduced-motion: reduce){
+    .view.active .panel, .view.active .kpi, .view.active .set-panel{ animation:none; }
+  }
+
+  /* modal entrance */
+  .modal-backdrop.show{ animation:fadeUp .16s ease both; }
+  .modal-backdrop.show .modal-box{ animation:popIn .22s cubic-bezier(.2,.9,.3,1.2) both; }
+
+  /* toast slides up from the corner */
+  .toast.show{ animation:popIn .24s cubic-bezier(.2,.9,.3,1.2) both; }
+
+  /* a row that was just inserted */
+  tr.new-row > td{ animation:rowFlash 1.5s ease both; }
+
+  /* bell reacting to a new notification */
+  .bell-badge.pop{ animation:badgePop .5s ease; }
+  .bell-wrap.ring{ animation:ringPulse 1.1s ease 2; border-radius:50%; }
+
+  /* search job bar: animated stripes while scanning, solid when done */
+  .job-bar span.running{
+    background-image:linear-gradient(115deg,
+      rgba(255,255,255,.28) 25%, transparent 25%, transparent 50%,
+      rgba(255,255,255,.28) 50%, rgba(255,255,255,.28) 75%, transparent 75%);
+    background-size:34px 34px;
+    animation:sweep .7s linear infinite;
+  }
+
+  /* skeleton rows while a search is resolving */
+  .skel{ padding:6px 0; }
+  .skel-line{
+    height:11px;border-radius:3px;margin:9px 0;
+    background:linear-gradient(90deg,#1e2127 0%,#272b32 40%,#1e2127 80%);
+    background-size:420px 100%;
+    animation:shimmer 1.1s linear infinite;
+  }
+  .skel-line.s1{width:16%;} .skel-line.s2{width:92%;} .skel-line.s3{width:74%;}
+
+  /* buttons that are mid-flight */
+  .btn.busy, .notify-btn.busy{ opacity:.75; pointer-events:none; }
+  .btn:active:not(:disabled){ transform:translateY(1px); }
+  .notify-btn{ transition:border-color .15s, color .15s, background .15s; }
+  .notify-btn.ticketed{ animation:badgePop .4s ease; }
+
+  /* alert row being evaluated */
+  tr.evaluating{ background:rgba(255,106,26,.07); }
+  tr.evaluating td{ opacity:.72; }
+  tr.fired-now > td{ animation:rowFlash 1.8s ease both; }
+
+  /* KPI values tick up rather than snapping */
+  .kpi .value{ transition:color .2s; font-variant-numeric:tabular-nums; }
+
+  /* nav + tab underline glide */
+  .topnav a{ transition:color .18s, border-color .18s; }
+  .search-tabs .st{ transition:color .18s, border-color .18s; }
+  .st.active, .topnav a.active{ transition:border-color .22s ease; }
+
+  /* chart panels fade their canvas in after a re-render */
+  .chart-wrap.refreshing{ opacity:.35; transition:opacity .15s; }
 </style>
 
 <body>
@@ -1951,9 +2032,9 @@ const ORG = {
   system  : 'Campus SIEM',
   index   : 'campus_siem',
   officer : 'SOC Duty Officer',
-  // Set this to the deployed dashboard URL after the first Vercel deploy and
-  // every report gains an "Open in console" button. Left blank, it is omitted.
-  console : ''
+  // Deployed console URL. Every incident report links back to it; blank omits
+  // the button. Reports are read outside the network, so this must be absolute.
+  console : 'https://campus-siem.vercel.app'
 };
 
 const SEV_META = {
@@ -2306,6 +2387,70 @@ function buildIncidentHtml({ id, sev, when, ctx, rows, actions, entity }){
 }
 
 /* =========================================================
+   Motion helpers — feedback for actions that do real work
+========================================================= */
+
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Count a number up instead of snapping to it. */
+function animateCount(el, to, ms){
+  if(!el) return;
+  const from = parseInt(String(el.textContent).replace(/[^0-9]/g,''), 10) || 0;
+  if(REDUCED || from === to){ el.textContent = fmt(to); return; }
+  const dur = ms || 520, t0 = performance.now();
+  (function step(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(Math.round(from + (to - from) * eased));
+    if(p < 1) requestAnimationFrame(step);
+    else el.textContent = fmt(to);
+  })(t0);
+}
+
+/* Put a button into a spinner state for the length of an async action. */
+async function withBusy(btn, label, fn){
+  if(!btn) return fn();
+  const original = btn.innerHTML;
+  btn.classList.add('busy');
+  btn.innerHTML = `<span class="spin"></span>${label}`;
+  try{ return await fn(); }
+  finally{
+    btn.classList.remove('busy');
+    btn.innerHTML = original;
+  }
+}
+
+/* Flash the first row of a table after something was prepended to it. */
+function flashFirstRow(tbodyId){
+  const tb = $(tbodyId);
+  if(!tb || REDUCED) return;
+  const tr = tb.querySelector('tr');
+  if(!tr) return;
+  tr.classList.add('new-row');
+  setTimeout(() => tr.classList.remove('new-row'), 1600);
+}
+
+/* Draw attention to the bell when something new lands there. */
+function pulseBell(){
+  if(REDUCED) return;
+  const badge = $('bellBadge'), wrap = $('bellWrap');
+  if(badge){ badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop'); }
+  if(wrap){ wrap.classList.remove('ring'); void wrap.offsetWidth; wrap.classList.add('ring');
+            setTimeout(() => wrap.classList.remove('ring'), 2400); }
+}
+
+/* Skeleton placeholder while a search resolves. */
+function skeletonRows(n){
+  let h = '<div class="skel">';
+  for(let i = 0; i < (n || 6); i++){
+    h += '<div style="display:grid;grid-template-columns:150px 1fr;gap:12px;">' +
+         '<div class="skel-line s1"></div>' +
+         '<div><div class="skel-line s2"></div><div class="skel-line s3"></div></div></div>';
+  }
+  return h + '</div>';
+}
+
+/* =========================================================
    Charts
 ========================================================= */
 const CHARTS = {};
@@ -2383,12 +2528,12 @@ function roleQ(){ return SCOPE.role === 'all' ? '' : ' role=' + SCOPE.role; }
 function renderDashboard(){
   const { d, sampled } = scopedData();
 
-  $('kpiTotal').textContent = fmt(d.kpi.total_events);
-  $('kpiSuspicious').textContent = fmt(d.kpi.suspicious_events);
+  animateCount($('kpiTotal'), d.kpi.total_events);
+  animateCount($('kpiSuspicious'), d.kpi.suspicious_events);
   $('kpiSuspiciousPct').textContent = d.kpi.total_events
     ? (100*d.kpi.suspicious_events/d.kpi.total_events).toFixed(1) + '% of total events' : '— of total';
-  $('kpiStudents').textContent = fmt(d.kpi.unique_students);
-  $('kpiIps').textContent = fmt(d.kpi.unique_ips);
+  animateCount($('kpiStudents'), d.kpi.unique_students);
+  animateCount($('kpiIps'), d.kpi.unique_ips);
   $('kpiTotalDelta').textContent = `across ${d.days.length} day${d.days.length===1?'':'s'}` + (sampled ? ' · sampled estimate' : '');
   $('chipEvents').textContent = fmt(d.kpi.total_events);
   $('chipStudents').textContent = fmt(d.kpi.unique_students);
@@ -2551,10 +2696,14 @@ let SEARCH_DAYS = 11;
 function jobProgress(done){
   const bar = $('sbJobBar'), txt = $('sbJobText');
   if(!done){
+    bar.classList.add('running');
     bar.style.width = '0%'; txt.innerHTML = '<span class="spin"></span>scanning…';
-    setTimeout(() => bar.style.width = '62%', 40);
+    setTimeout(() => bar.style.width = '38%', 30);
+    setTimeout(() => bar.style.width = '71%', 150);
   }else{
-    bar.style.width = '100%'; txt.textContent = 'job complete';
+    bar.style.width = '100%';
+    txt.textContent = 'job complete';
+    setTimeout(() => bar.classList.remove('running'), 260);
   }
 }
 
@@ -2565,6 +2714,8 @@ function runSearch(){
 
   const dayFrom = DATA.days.length - SEARCH_DAYS;
   const scoped = SEARCH_DAYS === 11 ? EVENTS : EVENTS.filter(e => e.dayIdx >= dayFrom);
+  $('evList').innerHTML = skeletonRows(6);
+  $('evPager').innerHTML = '';
   const res = runSPL(q, { events: scoped });
 
   setTimeout(() => {
@@ -3047,7 +3198,18 @@ function alertIncident(a, ev){
 async function runAlert(id, silent){
   const a = ALERTS.find(x => x.id === id);
   if(!a) return null;
+
+  // mark the row as working before the (synchronous) evaluation so the
+  // analyst sees the rule actually run rather than the table just changing
+  const row = document.querySelector(`#tblAlerts button[onclick="runAlert('${a.id}')"]`);
+  const tr = row && row.closest('tr');
+  if(tr && !silent){
+    tr.classList.add('evaluating');
+    await new Promise(r => setTimeout(r, 420));
+  }
+
   const ev = evalAlert(a);
+  if(tr) tr.classList.remove('evaluating');
   if(!ev.ok){ showToast('Alert search failed: ' + esc(ev.error), 'err'); return null; }
   if(!ev.triggered){
     if(!silent) showToast(`<b>${esc(a.title)}</b> — ${fmt(ev.matches)} matches, below threshold. Not triggered.`, 'info');
@@ -3098,8 +3260,9 @@ async function runAlert(id, silent){
   saveAlerts();
   FIRED.unshift({ at:new Date().toLocaleString(), title:a.title, severity:a.severity, matches:ev.matches, spl:a.spl, emailSent, via, emailError, ticket:ticketId });
   FIRED = FIRED.slice(0,50); saveFired();
-  pushNotification(`${a.title}`, `${ev.matches} matches · severity ${a.severity}` + (emailSent ? ' · email sent' : ''), a.spl);
+  pushNotification(`${a.title}`, `${ev.matches} matches · severity ${a.severity}` + (emailSent ? ' · dispatched' : ''), a.spl);
   renderAlerts();
+  flashFirstRow('tblFired');
 
   if(!silent){
     if(a.email && emailSent)      showToast(`Alert fired — incident dispatched to <b>${esc(MAIL.to)}</b>`);
@@ -3112,11 +3275,16 @@ async function runAlert(id, silent){
 
 async function runAllAlerts(){
   const enabled = ALERTS.filter(a => a.enabled);
-  let fired = 0;
-  for(const a of enabled){
-    const r = await runAlert(a.id, true);
-    if(r) fired++;
-  }
+  let fired = 0, done = 0;
+  await withBusy($('btnRunAllAlerts'), 'Running…', async () => {
+    for(const a of enabled){
+      done++;
+      showToast(`Evaluating <b>${esc(a.title)}</b> &middot; ${done}/${enabled.length}`, 'info');
+      const r = await runAlert(a.id, true);
+      if(r) fired++;
+      await new Promise(r2 => setTimeout(r2, 260));
+    }
+  });
   renderAlerts();
   showToast(`Ran ${enabled.length} enabled rule${enabled.length===1?'':'s'} — <b>${fired}</b> triggered`, fired ? 'err' : 'info');
 }
@@ -3138,6 +3306,7 @@ function pushTicket(t){
   ticket.student = t.row.student_id || t.row.alert || t.row.role || '—';
   TICKETS.unshift(ticket);
   saveTickets(); renderTickets();
+  flashFirstRow('tblTickets');
   const btn = $('notifyBtn-' + t.rowId);
   if(btn){ btn.classList.add('ticketed'); btn.textContent = '✓ Ticketed'; }
   return ticket;
@@ -3146,7 +3315,7 @@ function pushTicket(t){
 function pushNotification(title, msg, spl){
   NOTES.unshift({ id:Date.now() + '-' + Math.random().toString(36).slice(2,6), title, msg, spl, at:new Date().toLocaleTimeString() });
   NOTES = NOTES.slice(0,30);
-  saveNotes(); renderBell();
+  saveNotes(); renderBell(); pulseBell();
 }
 
 function renderBell(){
@@ -3543,7 +3712,15 @@ document.addEventListener('click', e => {
   pop.style.position = 'absolute';
   pop.style.zIndex = '80';
   const items = [
-    { label:'Refresh panel', act:() => { renderDashboard(); renderDashTables(); showToast('Panel refreshed'); } },
+    { label:'Refresh panel', act:() => {
+        const w = panel.querySelector('.chart-wrap');
+        if(w) w.classList.add('refreshing');
+        setTimeout(() => {
+          renderDashboard(); renderDashTables();
+          if(w) w.classList.remove('refreshing');
+          showToast('Panel refreshed');
+        }, 220);
+      } },
     { label:'Open in Search', act:() => gotoSearch(PANEL_QUERIES[key] || 'index=campus_siem') }
   ];
   if(PANEL_CSV[key]) items.push({ label:'Export CSV', act:() => { const d = PANEL_CSV[key](); downloadCSV(d.name, toCSV(d.fields, d.rows)); } });

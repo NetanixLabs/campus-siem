@@ -113,7 +113,15 @@ document.addEventListener('click', e => {
   pop.style.position = 'absolute';
   pop.style.zIndex = '80';
   const items = [
-    { label:'Refresh panel', act:() => { renderDashboard(); renderDashTables(); showToast('Panel refreshed'); } },
+    { label:'Refresh panel', act:() => {
+        const w = panel.querySelector('.chart-wrap');
+        if(w) w.classList.add('refreshing');
+        setTimeout(() => {
+          renderDashboard(); renderDashTables();
+          if(w) w.classList.remove('refreshing');
+          showToast('Panel refreshed');
+        }, 220);
+      } },
     { label:'Open in Search', act:() => gotoSearch(PANEL_QUERIES[key] || 'index=campus_siem') }
   ];
   if(PANEL_CSV[key]) items.push({ label:'Export CSV', act:() => { const d = PANEL_CSV[key](); downloadCSV(d.name, toCSV(d.fields, d.rows)); } });

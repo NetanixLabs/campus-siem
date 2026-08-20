@@ -12,9 +12,9 @@ const ORG = {
   system  : 'Campus SIEM',
   index   : 'campus_siem',
   officer : 'SOC Duty Officer',
-  // Set this to the deployed dashboard URL after the first Vercel deploy and
-  // every report gains an "Open in console" button. Left blank, it is omitted.
-  console : ''
+  // Deployed console URL. Every incident report links back to it; blank omits
+  // the button. Reports are read outside the network, so this must be absolute.
+  console : 'https://campus-siem.vercel.app'
 };
 
 const SEV_META = {
@@ -364,4 +364,68 @@ function buildIncidentHtml({ id, sev, when, ctx, rows, actions, entity }){
 </table>
 </body>
 </html>`;
+}
+
+/* =========================================================
+   Motion helpers — feedback for actions that do real work
+========================================================= */
+
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Count a number up instead of snapping to it. */
+function animateCount(el, to, ms){
+  if(!el) return;
+  const from = parseInt(String(el.textContent).replace(/[^0-9]/g,''), 10) || 0;
+  if(REDUCED || from === to){ el.textContent = fmt(to); return; }
+  const dur = ms || 520, t0 = performance.now();
+  (function step(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(Math.round(from + (to - from) * eased));
+    if(p < 1) requestAnimationFrame(step);
+    else el.textContent = fmt(to);
+  })(t0);
+}
+
+/* Put a button into a spinner state for the length of an async action. */
+async function withBusy(btn, label, fn){
+  if(!btn) return fn();
+  const original = btn.innerHTML;
+  btn.classList.add('busy');
+  btn.innerHTML = `<span class="spin"></span>${label}`;
+  try{ return await fn(); }
+  finally{
+    btn.classList.remove('busy');
+    btn.innerHTML = original;
+  }
+}
+
+/* Flash the first row of a table after something was prepended to it. */
+function flashFirstRow(tbodyId){
+  const tb = $(tbodyId);
+  if(!tb || REDUCED) return;
+  const tr = tb.querySelector('tr');
+  if(!tr) return;
+  tr.classList.add('new-row');
+  setTimeout(() => tr.classList.remove('new-row'), 1600);
+}
+
+/* Draw attention to the bell when something new lands there. */
+function pulseBell(){
+  if(REDUCED) return;
+  const badge = $('bellBadge'), wrap = $('bellWrap');
+  if(badge){ badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop'); }
+  if(wrap){ wrap.classList.remove('ring'); void wrap.offsetWidth; wrap.classList.add('ring');
+            setTimeout(() => wrap.classList.remove('ring'), 2400); }
+}
+
+/* Skeleton placeholder while a search resolves. */
+function skeletonRows(n){
+  let h = '<div class="skel">';
+  for(let i = 0; i < (n || 6); i++){
+    h += '<div style="display:grid;grid-template-columns:150px 1fr;gap:12px;">' +
+         '<div class="skel-line s1"></div>' +
+         '<div><div class="skel-line s2"></div><div class="skel-line s3"></div></div></div>';
+  }
+  return h + '</div>';
 }
