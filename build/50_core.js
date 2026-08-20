@@ -511,6 +511,14 @@ let MAIL = Object.assign({}, DEFAULT_MAIL, Store.get('mail', {}));
 let PREFS = Object.assign({ refresh:0, pageSize:20, confirmEmail:true }, Store.get('prefs', {}));
 
 const PROVIDER_HINT = {
+  resend:
+    'Best output — a fully branded HTML incident report with no third-party wrapper or footer. ' +
+    'Sends through this site\'s own <b>/api/send</b> serverless function, so the API key stays on the server ' +
+    'and never reaches the browser. Set up: create a key at <a href="https://resend.com/api-keys" target="_blank" rel="noopener">resend.com/api-keys</a>, ' +
+    'then add it in Vercel under <b>Project → Settings → Environment Variables</b> as <b>RESEND_API_KEY</b> and redeploy. ' +
+    'No domain needed while you send to the address your Resend account was created with; to reach anyone else, ' +
+    'verify a domain at resend.com/domains. Free tier: 3,000 emails/month. Leave the endpoint field blank unless ' +
+    'your function lives somewhere other than /api/send.',
   none:
     'No relay configured. <b>Notify</b> and alert actions will open your mail client with the message pre-filled ' +
     '(nothing is sent automatically). Pick a provider below to send real email straight from the page.',
@@ -529,7 +537,13 @@ const PROVIDER_HINT = {
     'The endpoint must send CORS headers allowing this origin.'
 };
 
-function mailConfigured(){ return MAIL.provider !== 'none' && !!MAIL.key.trim(); }
+function mailConfigured(){
+  if(MAIL.provider === 'none') return false;
+  // Resend goes through our own serverless route, so there is no
+  // client-side key to check — the endpoint field is only an override
+  if(MAIL.provider === 'resend') return true;
+  return !!MAIL.key.trim();
+}
 
 function mailStateLabel(){
   if(!mailConfigured()) return '✉️ delivery: not configured';
@@ -546,7 +560,7 @@ function mailtoFallback(to, cc, subject, body){
  * Sends the alert for real when a provider is configured.
  * Resolves { sent:true, via } or { sent:false, via:'mailto'|'error', error }
  */
-async function sendMail({ to, cc, subject, body, priority, meta }){
+async function sendMail({ to, cc, subject, body, html, priority, meta }){
   to = (to || MAIL.to || '').trim();
   cc = (cc != null ? cc : MAIL.cc || '').trim();
 
@@ -555,16 +569,19 @@ async function sendMail({ to, cc, subject, body, priority, meta }){
     return { sent:false, via:'mailto' };
   }
 
-  const endpoint = MAIL.provider === 'web3forms' ? 'https://api.web3forms.com/submit' : MAIL.key.trim();
+  const endpoint = MAIL.provider === 'web3forms' ? 'https://api.web3forms.com/submit'
+                 : MAIL.provider === 'resend'    ? (MAIL.key.trim() || '/api/send')
+                 : MAIL.key.trim();
   let payload;
 
-  if(MAIL.provider === 'formspree'){
-    payload = {
-      email: to, _replyto: to, _subject: subject,
-      _cc: cc || undefined,
-      message: body,
-      priority, recipient: to, source: 'Campus SIEM dashboard'
-    };
+  if(MAIL.provider === 'resend'){
+    // the API key never touches the browser — this hits our own
+    // Vercel function, which holds RESEND_API_KEY server-side
+    payload = { to, cc, subject, text: body, html: html || undefined, priority };
+  }else if(MAIL.provider === 'formspree'){
+    // Formspree renders every field it receives as a labelled block, so
+    // send exactly two: the subject it consumes, and the report itself.
+    payload = { _subject: subject, message: body };
   }else if(MAIL.provider === 'web3forms'){
     payload = {
       access_key: MAIL.key.trim(),

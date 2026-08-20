@@ -15,6 +15,7 @@ cd "$(dirname "$0")"
   echo '<script>'
   cat build/20_data.js
   cat build/50_core.js
+  cat build/55_report.js
   cat build/60_views.js
   cat build/70_init.js
   echo '</script>'

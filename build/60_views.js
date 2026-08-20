@@ -710,26 +710,32 @@ function editAlert(id){
   openModal('alertModal');
 }
 
-function alertBody(a, ev){
-  const top = ev.res.kind === 'events'
-    ? ev.res.events.slice(0,10).map(e =>
-        `  ${e.time}  student_id=${e.student_id}  role=${e.role}  src_ip=${e.src_ip}  behaviour=${e.behaviour}  req_per_min=${e.req_per_min}  status=${e.status}`)
-    : ev.res.rows.slice(0,10).map(r => '  ' + r.join('  '));
-  return [
-    `SIEM ALERT — ${a.title}`,
-    ``,
-    `Severity      : ${a.severity.toUpperCase()}`,
-    `Fired at      : ${new Date().toLocaleString()}`,
-    `Search        : ${a.spl}`,
-    `Condition     : count ${opLabel(a.op)} ${a.threshold}`,
-    `Matching events: ${ev.matches}`,
-    ``,
-    `Sample of matching events:`,
-    ...top,
-    ``,
-    `Index : campus_siem   Sourcetype : campus:siem   Source : campus_siem.log`,
-    `Sent by the Campus SIEM dashboard.`
-  ].join('\n');
+function alertIncident(a, ev){
+  // Pull the worst offender out of the matches so the report names a subject
+  // rather than just a count.
+  let lead = {};
+  if(ev.res.kind === 'events' && ev.res.events.length){
+    const top = groupCount(ev.res.events, ['student_id'])[0];
+    const sample = ev.res.events.find(e => String(e.student_id) === top.key[0]) || ev.res.events[0];
+    lead = {
+      student_id: sample.student_id, role: sample.role, src_ip: sample.src_ip,
+      behaviour: sample.behaviour, req_per_min: sample.req_per_min,
+      events_for_account: top.count
+    };
+  }else if(ev.res.rows && ev.res.rows.length){
+    lead = { top_result: ev.res.rows[0].join(' · ') };
+  }
+
+  return buildIncident({
+    source: a.title,
+    severity: a.severity,
+    fields: Object.assign({ alert: a.title }, lead),
+    spl: a.spl,
+    matches: ev.matches,
+    summary: `The correlation rule "${a.title}" matched ${ev.matches} events, crossing its ` +
+             `trigger condition of count ${opLabel(a.op)} ${a.threshold}. ` +
+             `The account shown below accounts for the largest share of the matches and should be triaged first.`
+  });
 }
 
 async function runAlert(id, silent){
@@ -742,15 +748,16 @@ async function runAlert(id, silent){
     return null;
   }
 
-  const subject = `[SIEM ${a.severity.toUpperCase()}] ${a.title} — ${ev.matches} matches`;
-  const body = alertBody(a, ev);
+  const incident = alertIncident(a, ev);
+  const subject = incident.subject;
+  const body = incident.text;
 
   if(a.email && PREFS.confirmEmail && !silent){
     currentRowContext = {
       panel:'Alert — ' + a.title,
       row:{ alert:a.title, matches:ev.matches, severity:a.severity, search:a.spl },
       rowId:'alert-' + a.id,
-      alertId:a.id, alertMatches:ev.matches, alertSpl:a.spl
+      alertId:a.id, alertMatches:ev.matches, alertSpl:a.spl, incident
     };
     $('modalTo').value = MAIL.to || '';
     $('modalSubject').value = subject;
@@ -764,7 +771,7 @@ async function runAlert(id, silent){
 
   let emailSent = false, via = '', emailError = '';
   if(a.email){
-    const r = await sendMail({ to: MAIL.to, cc: MAIL.cc, subject, body, priority:a.severity, meta:{ alert:a.title, matches:ev.matches, spl:a.spl } });
+    const r = await sendMail({ to: MAIL.to, cc: MAIL.cc, subject, body, html: incident.html, priority:a.severity, meta:{ alert:a.title, matches:ev.matches, spl:a.spl } });
     emailSent = r.sent; via = r.via; emailError = r.error || '';
   }
 
@@ -894,18 +901,19 @@ function resolveTicket(id){
 }
 
 /* ---------------- notify modal ---------------- */
-function buildAlertText(panel, row){
-  const lines = Object.entries(row).map(([k,v]) => `${k.replace(/_/g,' ')}: ${v}`);
-  return `SIEM Alert — ${panel}\n\n${lines.join('\n')}\n\nIndex: campus_siem · Sourcetype: campus:siem\nGenerated from the Campus SIEM dashboard at ${new Date().toLocaleString()}.`;
-}
-
 function openNotifyModal(panel, row, rowId){
-  currentRowContext = { panel, row, rowId };
   const priority = row.severity || MAIL.priority || 'medium';
+  const incident = buildIncident({
+    source: panel,
+    severity: ['high','medium','low'].indexOf(priority) !== -1 ? priority : 'medium',
+    fields: row
+  });
+  currentRowContext = { panel, row, rowId, incident };
+
   $('modalTo').value = MAIL.to || DEFAULT_MAIL.to;
-  $('modalSubject').value = `[SIEM Alert] ${panel} — ${row.student_id || row.role || 'unknown'} (${String(priority).toUpperCase()})`;
+  $('modalSubject').value = incident.subject;
   $('modalPriority').value = ['high','medium','low'].indexOf(priority) !== -1 ? priority : 'medium';
-  $('modalBody').value = buildAlertText(panel, row);
+  $('modalBody').value = incident.text;
   setStatus('modalStatus', mailConfigured()
     ? `Sending for real via <b>${esc(MAIL.provider)}</b>.`
     : 'No relay configured — this will open your mail client instead. Set one up under <b>Settings → Email Delivery</b> to send automatically.',
@@ -967,8 +975,14 @@ async function sendEmailAndTicket(){
   runFlowAnimation(['trigger','build','email']);
   setStatus('modalStatus','Contacting mail relay…','info');
 
+  // If the analyst edited the body, the stored HTML no longer matches it —
+  // fall back to text-only rather than mailing something they did not approve.
+  const inc = currentRowContext.incident;
+  const edited = !inc || body !== inc.text;
+
   const r = await sendMail({
     to, cc: MAIL.cc, subject, body,
+    html: edited ? null : inc.html,
     priority: $('modalPriority').value,
     meta: { panel: currentRowContext.panel, row: currentRowContext.row }
   });
@@ -1052,6 +1066,11 @@ function updateProviderHint(){
 function validateMailCfg(){
   const p = $('setProvider').value, k = $('setKey').value.trim();
   if(p === 'none') return null;
+  if(p === 'resend'){
+    if(k && !/^\/|^https?:\/\//i.test(k)) return 'Leave blank to use <b>/api/send</b>, or give a full URL / absolute path.';
+    if(/^re_/.test(k)) return 'That looks like a Resend <b>API key</b>. Never put it here — it would ship in the page source. Add it in Vercel as <b>RESEND_API_KEY</b> and leave this field blank.';
+    return null;
+  }
   if(!k) return 'Enter the endpoint or access key for ' + p + '.';
   if(p === 'formspree' && !/^https:\/\/formspree\.io\/f\/\w+/.test(k))
     return 'A Formspree endpoint looks like <b>https://formspree.io/f/abcdwxyz</b>.';
@@ -1089,12 +1108,19 @@ async function sendTestEmail(){
   const btn = $('btnTestMail');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…';
   setStatus('setStatus','Contacting mail relay…','info');
+  // Send the real report shape, not a bare "hello" — the point of the test is
+  // to show exactly what a live alert will look like in the inbox.
+  const incident = buildIncident({
+    source: 'Delivery self-test',
+    severity: 'low',
+    fields: { alert:'Delivery self-test', provider: MAIL.provider, recipient: MAIL.to },
+    summary: `This is a delivery self-test from ${ORG.system}. It was sent through the ` +
+             `${MAIL.provider} relay to confirm that live incident notifications reach this mailbox. ` +
+             `No action is required — the layout below is what a real alert will look like.`
+  });
   const r = await sendMail({
-    to: MAIL.to,
-    subject: '[SIEM TEST] Campus SIEM delivery check',
-    body: `This is a test message from the Campus SIEM dashboard.\n\nProvider : ${MAIL.provider}\nSent at  : ${new Date().toLocaleString()}\n\nIf you are reading this, alert emails from the dashboard will reach you.`,
-    priority: 'low',
-    meta: { test:true }
+    to: MAIL.to, subject: incident.subject, body: incident.text,
+    html: incident.html, priority: 'low', meta: { test:true }
   });
   btn.disabled = false; btn.textContent = 'Send Test Email';
   if(r.sent)                setStatus('setStatus', `Test email sent via <b>${esc(r.via)}</b>. Check the inbox registered with your ${esc(MAIL.provider)} endpoint.`, 'ok');
