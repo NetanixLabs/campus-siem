@@ -1,0 +1,734 @@
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">S</div>
+    splunk<span class="divider">&gt;</span>
+    <span class="app">Campus SIEM</span>
+  </div>
+  <div class="topnav" id="topnav">
+    <a data-view="dashboards" class="active">Dashboards</a>
+    <a data-view="search">Search</a>
+    <a data-view="reports">Reports</a>
+    <a data-view="alerts">Alerts</a>
+    <a data-view="settings">Settings</a>
+  </div>
+  <div class="topbar-right">
+    <span><span class="live-dot"></span> data indexed</span>
+    <span id="clock"></span>
+    <div class="bell-wrap" id="bellWrap" title="Notifications">
+      &#128276;<span class="bell-badge" id="bellBadge">0</span>
+      <div class="bell-menu" id="bellMenu">
+        <div class="bm-head">
+          <span>Notifications</span>
+          <span class="lnk" id="bellClear" style="font-size:10.5px;">Clear all</span>
+        </div>
+        <div class="bm-list" id="bellList"></div>
+        <div class="bm-head" style="border-top:1px solid var(--border);border-bottom:none;justify-content:center;">
+          <span class="lnk" id="bellGoTickets" style="font-size:11px;">View ticket queue</span>
+        </div>
+      </div>
+    </div>
+    <div class="avatar" id="avatar" title="Signed in">CS</div>
+  </div>
+</div>
+
+<!-- ============================ DASHBOARDS ============================ -->
+<div class="view active" id="view-dashboards">
+
+<div class="header">
+  <div>
+    <h1>Campus SIEM &mdash; Behaviour Analytics</h1>
+    <div class="sub">Source: campus_siem.log &middot; sourcetype=campus:siem &middot; index=campus_siem</div>
+  </div>
+  <div class="header-controls">
+    <div class="dd" id="ddTime">
+      <div class="pill accent">&#128337; <span id="ddTimeLabel">Jul 3 &ndash; Jul 13, 2026</span> <span class="caret">&#9662;</span></div>
+      <div class="dd-menu" id="ddTimeMenu">
+        <div class="dd-head">Presets</div>
+        <div class="dd-item" data-days="1">Last 24 hours</div>
+        <div class="dd-item" data-days="3">Last 3 days</div>
+        <div class="dd-item" data-days="7">Last 7 days</div>
+        <div class="dd-item sel" data-days="11">All time (Jul 3 &ndash; Jul 13, 2026)</div>
+        <div class="dd-sep"></div>
+        <div class="dd-head">Real-time</div>
+        <div class="dd-item" data-days="11" data-rt="1">30 second window</div>
+      </div>
+    </div>
+    <div class="dd" id="ddRole">
+      <div class="pill">Role: <span id="ddRoleLabel">All</span> <span class="caret">&#9662;</span></div>
+      <div class="dd-menu" id="ddRoleMenu">
+        <div class="dd-head">Filter by role</div>
+        <div class="dd-item sel" data-role="all">All roles</div>
+        <div class="dd-item" data-role="student">student</div>
+        <div class="dd-item" data-role="staff">staff</div>
+        <div class="dd-item" data-role="admin">admin</div>
+        <div class="dd-item" data-role="parent">parent</div>
+      </div>
+    </div>
+    <button class="btn-edit" id="btnEdit">Edit</button>
+  </div>
+</div>
+
+<div class="edit-bar">
+  <b style="color:var(--orange);">Edit mode</b>
+  <span>Use the &#8943; menu on any panel to hide it. Changes are saved to this browser.</span>
+  <span style="flex:1;"></span>
+  <button class="btn secondary small" id="btnEditRestore">Restore all panels</button>
+  <button class="btn small" id="btnEditDone">Done</button>
+</div>
+
+<div class="filters">
+  <div class="filter-chip">index=<b>campus_siem</b></div>
+  <div class="filter-chip">sourcetype=<b>campus:siem</b></div>
+  <div class="filter-chip">events=<b id="chipEvents">50,000</b></div>
+  <div class="filter-chip">unique students=<b id="chipStudents">1,674</b></div>
+  <div class="filter-chip">unique src_ip=<b id="chipIps">5,439</b></div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi k1 clickable" data-q="index=campus_siem">
+    <div class="label">Total Events</div>
+    <div class="value" id="kpiTotal">0</div>
+    <div class="delta" id="kpiTotalDelta">across 11 days</div>
+  </div>
+  <div class="kpi k2 clickable" data-q="index=campus_siem behaviour!=normal">
+    <div class="label">Suspicious Events</div>
+    <div class="value" id="kpiSuspicious">0</div>
+    <div class="delta warn" id="kpiSuspiciousPct">&mdash; of total</div>
+  </div>
+  <div class="kpi k3 clickable" data-q="index=campus_siem | stats dc(student_id)">
+    <div class="label">Unique Students</div>
+    <div class="value" id="kpiStudents">0</div>
+    <div class="delta">flagged accounts included</div>
+  </div>
+  <div class="kpi k4 clickable" data-q="index=campus_siem | stats dc(src_ip)">
+    <div class="label">Unique Source IPs</div>
+    <div class="value" id="kpiIps">0</div>
+    <div class="delta">incl. IPv6 client ranges</div>
+  </div>
+</div>
+
+<div class="grid" id="dashGrid">
+
+  <div class="panel span2" data-panel="workflow">
+    <div class="panel-head">
+      <div class="title">Notification &amp; Ticketing Workflow</div>
+      <div class="head-right"><div class="tag">alert &rarr; email &rarr; ticket</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body" style="padding-bottom:4px;">
+      <div class="flow-row" id="flowRow">
+        <div class="flow-node" id="flowNode-trigger"><div class="fn-icon">&#9889;</div><div class="fn-label">Trigger</div><div class="fn-sub">Row flagged</div></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node" id="flowNode-build"><div class="fn-icon">&#129513;</div><div class="fn-label">Build Alert</div><div class="fn-sub">Compose message</div></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node" id="flowNode-email"><div class="fn-icon">&#9993;&#65039;</div><div class="fn-label">Send Email</div><div class="fn-sub">To SOC/admin</div></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node" id="flowNode-ticket"><div class="fn-icon">&#127915;</div><div class="fn-label">Create Ticket</div><div class="fn-sub">Log &amp; track</div></div>
+      </div>
+    </div>
+    <div class="notify-settings">
+      <div class="field">
+        <label>Notify Email (To)</label>
+        <input type="email" id="cfgToEmail" placeholder="keedhecker@gmail.com" value="keedhecker@gmail.com">
+      </div>
+      <div class="field">
+        <label>CC</label>
+        <input type="email" id="cfgCcEmail" placeholder="optional">
+      </div>
+      <div class="field">
+        <label>Default Priority</label>
+        <select id="cfgPriority">
+          <option value="high">High</option>
+          <option value="medium" selected>Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <button class="btn secondary small" onclick="saveNotifySettings()">Save Settings</button>
+      <span style="font-size:11px;color:var(--text-faint);">Click <b>Notify</b> next to any flagged row below to open a ticket and send an alert email. Delivery is configured under <b class="lnk" data-goto="settings">Settings &rarr; Email Delivery</b>.</span>
+    </div>
+  </div>
+
+  <div class="panel span2" data-panel="timeline">
+    <div class="panel-head">
+      <div class="title">Events Over Time &mdash; Suspicious vs Normal</div>
+      <div class="head-right"><div class="tag">timechart span=1d</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap tall"><canvas id="chartTimeline"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="behaviour">
+    <div class="panel-head">
+      <div class="title">Behaviour Breakdown</div>
+      <div class="head-right"><div class="tag">stats count by behaviour</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartBehaviour"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="hourly">
+    <div class="panel-head">
+      <div class="title">Suspicious Activity by Hour of Day</div>
+      <div class="head-right"><div class="tag">stats count by hour</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartHourly"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="topips">
+    <div class="panel-head">
+      <div class="title">Top 10 Source IPs (Suspicious)</div>
+      <div class="head-right"><div class="tag">top src_ip</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartTopIps"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="topstudents">
+    <div class="panel-head">
+      <div class="title">Top 10 Students &mdash; Suspicious Events</div>
+      <div class="head-right"><div class="tag">top student_id</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartTopStudents"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="midnight">
+    <div class="panel-head">
+      <div class="title">Midnight Download Timeline</div>
+      <div class="head-right"><div class="tag">behaviour=midnight_download</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartMidnight"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="authfail">
+    <div class="panel-head">
+      <div class="title">Authentication Failures Over Time</div>
+      <div class="head-right"><div class="tag">sum(auth_fail)</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartAuthFail"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="status">
+    <div class="panel-head">
+      <div class="title">HTTP Status Code Distribution</div>
+      <div class="head-right"><div class="tag">stats count by status</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartStatus"></canvas></div></div>
+  </div>
+
+  <div class="panel" data-panel="role">
+    <div class="panel-head">
+      <div class="title">Role Distribution</div>
+      <div class="head-right"><div class="tag">stats count by role</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body"><div class="chart-wrap"><canvas id="chartRole"></canvas></div></div>
+  </div>
+
+  <div class="panel span2" data-panel="massdl">
+    <div class="panel-head">
+      <div class="title">Mass Download Events &mdash; Detail</div>
+      <div class="head-right"><div class="tag">behaviour=mass_download</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body">
+      <table class="sp-table">
+        <thead><tr><th>Student / Account</th><th>Source IP</th><th>Events</th><th>Severity</th><th>Action</th></tr></thead>
+        <tbody id="tblMassDl"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel" data-panel="dbadmin">
+    <div class="panel-head">
+      <div class="title">DB Admin Access Attempts</div>
+      <div class="head-right"><div class="tag">behaviour=db_admin_access</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body">
+      <table class="sp-table">
+        <thead><tr><th>Role</th><th>Student ID</th><th>Events</th><th>Action</th></tr></thead>
+        <tbody id="tblDbAdmin"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel" data-panel="burst">
+    <div class="panel-head">
+      <div class="title">High Request-Rate Bursts (&gt;150/min)</div>
+      <div class="head-right"><div class="tag">max(req_per_min)</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body">
+      <table class="sp-table">
+        <thead><tr><th>Student ID</th><th>Src IP</th><th>Bursts</th><th>Peak rpm</th><th>Action</th></tr></thead>
+        <tbody id="tblBurst"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel span2" id="ticketsPanel" data-panel="tickets">
+    <div class="panel-head">
+      <div class="title">Ticket Queue</div>
+      <div class="head-right"><div class="tag" id="ticketCountTag">0 tickets</div><button class="panel-menu" data-pmenu>&#8943;</button></div>
+    </div>
+    <div class="panel-body">
+      <table class="sp-table">
+        <thead><tr><th>Ticket ID</th><th>Source Panel</th><th>Student / Account</th><th>Priority</th><th>Status</th><th>Created</th><th>Sent To</th><th>Action</th></tr></thead>
+        <tbody id="tblTickets"><tr><td colspan="8" style="color:var(--text-faint);">No tickets yet &mdash; click Notify on a flagged row above.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-note">
+  Rendered client-side from campus_siem.log (50,000 events parsed) &mdash; static export of the Splunk Simple XML dashboard, for review/demo without a live Splunk instance.
+</div>
+
+</div><!-- /view-dashboards -->
+
+<!-- ============================ SEARCH ============================ -->
+<div class="view" id="view-search">
+  <div class="search-bar">
+    <div class="sb-row">
+      <textarea class="sb-input" id="spl" rows="1" spellcheck="false">index=campus_siem sourcetype=campus:siem</textarea>
+      <div class="sb-time dd" id="ddSearchTime">
+        <span>&#128337; <span id="searchTimeLabel">All time</span> <span class="caret">&#9662;</span></span>
+        <div class="dd-menu" id="ddSearchTimeMenu">
+          <div class="dd-head">Presets</div>
+          <div class="dd-item" data-days="1">Last 24 hours</div>
+          <div class="dd-item" data-days="3">Last 3 days</div>
+          <div class="dd-item" data-days="7">Last 7 days</div>
+          <div class="dd-item sel" data-days="11">All time</div>
+        </div>
+      </div>
+      <button class="sb-go" id="btnSearch" title="Run search">&#128269;</button>
+    </div>
+    <div class="sb-meta">
+      <span><b id="sbCount">0</b> events</span>
+      <span id="sbRange">Jul 3, 2026 &ndash; Jul 13, 2026</span>
+      <span id="sbJobText">job complete</span>
+      <div class="job-bar"><span id="sbJobBar"></span></div>
+      <span style="flex:1;"></span>
+      <button class="btn secondary small" id="btnSaveAsReport">Save As Report</button>
+      <button class="btn secondary small" id="btnSaveAsAlert">Save As Alert</button>
+      <button class="btn secondary small" id="btnExportCsv">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="search-body">
+    <div class="fields-panel">
+      <div class="fp-head">Selected Fields</div>
+      <div class="fp-list" id="fpSelected"></div>
+      <div class="fp-head" style="border-top:1px solid var(--border-soft);">Interesting Fields</div>
+      <div class="fp-list" id="fpInteresting"></div>
+    </div>
+
+    <div>
+      <div class="search-tabs" id="searchTabs">
+        <div class="st active" data-stab="events">Events</div>
+        <div class="st" data-stab="stats">Statistics</div>
+        <div class="st" data-stab="viz">Visualization</div>
+      </div>
+
+      <div class="stab active" id="stab-events">
+        <div style="padding:12px 0 4px;">
+          <div class="chart-wrap" style="height:110px;"><canvas id="chartSearchTimeline"></canvas></div>
+        </div>
+        <div class="ev-list" id="evList"></div>
+        <div class="pager" id="evPager"></div>
+      </div>
+
+      <div class="stab" id="stab-stats">
+        <div style="padding:12px 0;">
+          <table class="sp-table" id="statsTable">
+            <thead id="statsHead"></thead>
+            <tbody id="statsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="stab" id="stab-viz">
+        <div style="padding:12px 0;">
+          <div class="toolbar">
+            <span style="font-size:11px;color:var(--text-dim);">Chart type</span>
+            <select id="vizType" style="background:var(--bg-app);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:3px;font-size:12px;">
+              <option value="bar">Column</option>
+              <option value="hbar">Bar</option>
+              <option value="line">Line</option>
+              <option value="doughnut">Pie</option>
+            </select>
+            <span style="font-size:11px;color:var(--text-dim);margin-left:10px;">Split by</span>
+            <select id="vizField" style="background:var(--bg-app);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:3px;font-size:12px;"></select>
+          </div>
+          <div class="chart-wrap tall"><canvas id="chartSearchViz"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ REPORTS ============================ -->
+<div class="view" id="view-reports">
+  <div class="view-head">
+    <div>
+      <h1>Reports</h1>
+      <div class="sub">Saved searches over index=campus_siem. Open a report to run it against the indexed events.</div>
+    </div>
+    <div class="header-controls">
+      <button class="btn" id="btnNewReport">+ New Report</button>
+    </div>
+  </div>
+  <div class="view-wrap">
+    <div class="toolbar">
+      <input type="text" id="reportFilter" placeholder="filter reports&hellip;">
+      <span class="spacer"></span>
+      <span style="font-size:11.5px;color:var(--text-faint);" id="reportCount"></span>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div class="title">All Reports</div><div class="head-right"><div class="tag">app: campus_siem</div></div></div>
+      <div class="panel-body" style="padding:0 14px 14px;">
+        <table class="sp-table">
+          <thead><tr><th style="width:26%;">Title</th><th>Description</th><th>Owner</th><th>Sharing</th><th>Last Run</th><th style="width:230px;">Actions</th></tr></thead>
+          <tbody id="tblReports"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="reportResultPanel" style="margin-top:14px;display:none;">
+      <div class="panel-head">
+        <div class="title" id="reportResultTitle">Report results</div>
+        <div class="head-right">
+          <div class="tag" id="reportResultTag">&mdash;</div>
+          <button class="btn secondary small" id="btnReportCsv">Export CSV</button>
+          <button class="btn secondary small" id="btnReportSearch">Open in Search</button>
+          <button class="btn secondary small" id="btnReportClose">Close</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="chart-wrap" id="reportChartWrap"><canvas id="chartReport"></canvas></div>
+        <table class="sp-table" style="margin-top:14px;">
+          <thead id="reportHead"></thead>
+          <tbody id="reportBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ ALERTS ============================ -->
+<div class="view" id="view-alerts">
+  <div class="view-head">
+    <div>
+      <h1>Alerts</h1>
+      <div class="sub">Correlation rules evaluated against index=campus_siem. Triggering an alert sends a real email and opens a ticket.</div>
+    </div>
+    <div class="header-controls">
+      <div class="pill accent" id="alertEmailState">&#9993;&#65039; delivery: not configured</div>
+      <button class="btn" id="btnNewAlert">+ New Alert</button>
+    </div>
+  </div>
+  <div class="view-wrap">
+    <div class="toolbar">
+      <input type="text" id="alertFilter" placeholder="filter alerts&hellip;">
+      <button class="btn secondary small" id="btnRunAllAlerts">Run all enabled now</button>
+      <span class="spacer"></span>
+      <span style="font-size:11.5px;color:var(--text-faint);" id="alertCount"></span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div class="title">Alert Rules</div><div class="head-right"><div class="tag">app: campus_siem</div></div></div>
+      <div class="panel-body" style="padding:0 14px 14px;">
+        <table class="sp-table">
+          <thead><tr><th style="width:24%;">Title</th><th>Trigger condition</th><th>Severity</th><th>Matches</th><th>Enabled</th><th>Last Triggered</th><th style="width:210px;">Actions</th></tr></thead>
+          <tbody id="tblAlerts"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px;">
+      <div class="panel-head">
+        <div class="title">Triggered Alerts</div>
+        <div class="head-right"><div class="tag" id="firedTag">0 fired</div><button class="btn secondary small" id="btnClearFired">Clear history</button></div>
+      </div>
+      <div class="panel-body" style="padding:0 14px 14px;">
+        <table class="sp-table">
+          <thead><tr><th>Time</th><th>Alert</th><th>Severity</th><th>Matches</th><th>Email</th><th>Ticket</th><th>Actions</th></tr></thead>
+          <tbody id="tblFired"><tr><td colspan="7" style="color:var(--text-faint);">No alerts have fired in this session.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ SETTINGS ============================ -->
+<div class="view" id="view-settings">
+  <div class="view-head">
+    <div>
+      <h1>Settings</h1>
+      <div class="sub">Email delivery, notification defaults, index configuration and dashboard preferences.</div>
+    </div>
+  </div>
+  <div class="view-wrap">
+    <div class="set-grid">
+
+      <div class="set-panel" style="grid-column:1/-1;">
+        <div class="panel-head">
+          <div class="title">Email Delivery &mdash; Alert Actions</div>
+          <div class="head-right"><div class="tag">required for real email</div></div>
+        </div>
+        <div class="set-body">
+          <div class="status-line info show" id="mailExplain">
+            This dashboard is a static site, so it hands outbound mail to a form-relay service. Create a free
+            endpoint, paste it below, and every <b>Notify</b> / alert action sends a real email.
+          </div>
+          <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field">
+              <label>Provider</label>
+              <select id="setProvider">
+                <option value="none">Disabled &mdash; open mail client (mailto:)</option>
+                <option value="formspree">Formspree</option>
+                <option value="web3forms">Web3Forms</option>
+                <option value="webhook">Custom webhook (JSON POST)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label id="setKeyLabel">Endpoint / Access key</label>
+              <input type="text" id="setKey" placeholder="https://formspree.io/f/xxxxxxx" spellcheck="false">
+            </div>
+          </div>
+          <div class="hint" id="setKeyHint"></div>
+          <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field">
+              <label>Default recipient (To)</label>
+              <input type="email" id="setTo" placeholder="keedhecker@gmail.com">
+            </div>
+            <div class="field">
+              <label>CC</label>
+              <input type="email" id="setCc" placeholder="optional">
+            </div>
+          </div>
+          <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field">
+              <label>From name</label>
+              <input type="text" id="setFromName" placeholder="Campus SIEM">
+            </div>
+            <div class="field">
+              <label>Default priority</label>
+              <select id="setPriority">
+                <option value="high">High</option>
+                <option value="medium" selected>Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="status-line" id="setStatus"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn" id="btnSaveMail">Save Delivery Settings</button>
+            <button class="btn secondary" id="btnTestMail">Send Test Email</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-panel">
+        <div class="panel-head"><div class="title">Index Configuration</div><div class="head-right"><div class="tag">read-only</div></div></div>
+        <div class="panel-body" style="padding:0;">
+          <div class="set-links">
+            <div class="set-link" data-idx="index">index=campus_siem <span class="d">50,000 events</span></div>
+            <div class="set-link" data-idx="sourcetype">sourcetype=campus:siem <span class="d">auto KV extraction</span></div>
+            <div class="set-link" data-idx="source">source=campus_siem.log <span class="d">monitor input</span></div>
+            <div class="set-link" data-idx="retention">Retention policy <span class="d">90 days / 5 GB</span></div>
+            <div class="set-link" data-idx="fields">Field extractions <span class="d">11 fields</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-panel">
+        <div class="panel-head"><div class="title">Dashboard Preferences</div><div class="head-right"><div class="tag">this browser</div></div></div>
+        <div class="set-body">
+          <div class="field">
+            <label>Auto-refresh</label>
+            <select id="setRefresh">
+              <option value="0">Off</option>
+              <option value="30">Every 30 seconds</option>
+              <option value="60">Every minute</option>
+              <option value="300">Every 5 minutes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Events per page (Search)</label>
+            <select id="setPageSize">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+          <label class="chk"><input type="checkbox" id="setConfirmEmail" checked> Confirm before sending each alert email</label>
+          <button class="btn secondary" id="btnSavePrefs">Save Preferences</button>
+        </div>
+      </div>
+
+      <div class="set-panel">
+        <div class="panel-head"><div class="title">Data Management</div><div class="head-right"><div class="tag">local state</div></div></div>
+        <div class="panel-body" style="padding:0;">
+          <div class="set-links">
+            <div class="set-link" id="lnkExportTickets">Export ticket queue (CSV) <span class="d" id="cntTickets">0 tickets</span></div>
+            <div class="set-link" id="lnkExportEvents">Export indexed events (CSV) <span class="d">current search</span></div>
+            <div class="set-link" id="lnkClearTickets" style="color:var(--red);">Clear all tickets <span class="d">cannot be undone</span></div>
+            <div class="set-link" id="lnkResetAll" style="color:var(--red);">Reset all saved settings <span class="d">restores defaults</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================ MODALS ============================ -->
+<div class="modal-backdrop" id="notifyModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="title">Create Alert &amp; Ticket</div>
+      <button class="modal-close" onclick="closeNotifyModal()">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>To</label>
+        <input type="email" id="modalTo">
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="modalSubject">
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <select id="modalPriority">
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Message</label>
+        <textarea id="modalBody"></textarea>
+      </div>
+      <div class="status-line" id="modalStatus"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" onclick="closeNotifyModal()">Cancel</button>
+      <button class="btn secondary" onclick="createTicketOnly()">Create Ticket Only</button>
+      <button class="btn" id="btnSendEmail" onclick="sendEmailAndTicket()">Send Email</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="alertModal">
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <div class="title" id="alertModalTitle">New Alert</div>
+      <button class="modal-close" data-close="alertModal">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Alert title</label>
+        <input type="text" id="alTitle" placeholder="Excessive DB admin access by student role">
+      </div>
+      <div class="field">
+        <label>Search (SPL)</label>
+        <textarea id="alSearch" style="min-height:70px;font-family:'SF Mono',Consolas,monospace;">index=campus_siem behaviour=db_admin_access role=student</textarea>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Trigger when matches</label>
+          <select id="alOp">
+            <option value="gt">is greater than</option>
+            <option value="lt">is less than</option>
+            <option value="eq">is equal to</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Threshold</label>
+          <input type="number" id="alThreshold" value="10" min="0">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Severity</label>
+          <select id="alSeverity">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Schedule</label>
+          <select id="alCron">
+            <option value="*/5 * * * *">Every 5 minutes</option>
+            <option value="0 * * * *" selected>Hourly</option>
+            <option value="0 0 * * *">Daily at midnight</option>
+            <option value="manual">Manual only</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Alert actions</label>
+        <label class="chk"><input type="checkbox" id="alActEmail" checked> Send email to <span id="alActEmailTo" style="color:var(--teal);">&mdash;</span></label>
+        <label class="chk"><input type="checkbox" id="alActTicket" checked> Create ticket in queue</label>
+        <label class="chk"><input type="checkbox" id="alActEnabled" checked> Enabled</label>
+      </div>
+      <div class="status-line" id="alStatus"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="alertModal">Cancel</button>
+      <button class="btn secondary" id="btnAlPreview">Preview matches</button>
+      <button class="btn" id="btnAlSave">Save Alert</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="reportModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="title" id="reportModalTitle">New Report</div>
+      <button class="modal-close" data-close="reportModal">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Report title</label>
+        <input type="text" id="rpTitle" placeholder="Top offending source IPs">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <input type="text" id="rpDesc" placeholder="What this report answers">
+      </div>
+      <div class="field">
+        <label>Search (SPL)</label>
+        <textarea id="rpSearch" style="min-height:70px;font-family:'SF Mono',Consolas,monospace;">index=campus_siem behaviour!=normal | stats count by src_ip</textarea>
+      </div>
+      <div class="field">
+        <label>Visualization</label>
+        <select id="rpViz">
+          <option value="bar">Column</option>
+          <option value="hbar">Bar</option>
+          <option value="line">Line</option>
+          <option value="doughnut">Pie</option>
+          <option value="none">Statistics table only</option>
+        </select>
+      </div>
+      <div class="status-line" id="rpStatus"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="reportModal">Cancel</button>
+      <button class="btn" id="btnRpSave">Save Report</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="infoModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="title" id="infoTitle">Details</div>
+      <button class="modal-close" data-close="infoModal">&#10005;</button>
+    </div>
+    <div class="modal-body" id="infoBody"></div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="infoModal">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
