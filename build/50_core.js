@@ -48,6 +48,9 @@ const PALETTE = [C.blue,C.red,C.gold,C.purple,C.teal,C.green,C.orange,'#7a828c',
 Chart.defaults.color = C.dim;
 Chart.defaults.font.size = 11;
 Chart.defaults.borderColor = C.grid;
+Chart.defaults.animation.duration = 850;
+Chart.defaults.animation.easing = 'easeOutQuart';
+Chart.defaults.plugins.tooltip.animation = { duration: 140 };
 
 const fmt = n => (typeof n === 'number' ? n : 0).toLocaleString('en-US');
 const esc = s => String(s == null ? '' : s)

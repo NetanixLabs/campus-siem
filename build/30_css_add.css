@@ -360,3 +360,15 @@
 
   /* chart panels fade their canvas in after a re-render */
   .chart-wrap.refreshing{ opacity:.35; transition:opacity .15s; }
+
+  /* ---------- live pipeline ---------- */
+  @keyframes liveIn { 0%{opacity:0;transform:translateY(-8px);background:rgba(101,166,55,.16);}
+                      60%{opacity:1;transform:none;}
+                      100%{background:transparent;} }
+  .ev.live-in{ animation:liveIn 1.4s ease both; }
+
+  /* the pulse quickens while a real-time search is running */
+  body.realtime .live-dot{ animation:pulse .9s infinite; }
+  body.realtime .sb-time{ border-color:var(--orange); color:var(--orange); }
+
+  #epsRate{ font-variant-numeric:tabular-nums; transition:color .3s; }

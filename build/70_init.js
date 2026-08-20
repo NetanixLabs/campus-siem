@@ -43,7 +43,8 @@ $('ddTimeMenu').addEventListener('click', e => {
   if(SCOPE.days === 11 && !SCOPE.rt) $('ddTimeLabel').textContent = 'Jul 3 – Jul 13, 2026';
   $('ddTime').classList.remove('open');
   renderDashboard();
-  showToast(SCOPE.rt ? 'Real-time window enabled' : `Time range set to ${esc($('ddTimeLabel').textContent)}`);
+  if(SCOPE.rt){ startRealtime(); showToast('Real-time window enabled &mdash; tailing live events'); }
+  else{ stopRealtime(); showToast(`Time range set to ${esc($('ddTimeLabel').textContent)}`); }
 });
 
 $('ddRoleMenu').addEventListener('click', e => {
@@ -160,6 +161,19 @@ $('btnEditDone').addEventListener('click', () => {
   $('btnEdit').textContent = 'Edit';
   showToast('Dashboard layout saved');
 });
+/* ---------------- reset console ---------------- */
+function resetConsole(){
+  const n = TICKETS.length, f = FIRED.length;
+  const detail = (n || f)
+    ? `This clears ${n} ticket${n===1?'':'s'}, ${f} triggered alert${f===1?'':'s'}, every saved report and alert rule, notification settings and hidden panels.`
+    : 'This restores every saved report, alert rule, setting and hidden panel to its original state.';
+  if(!confirm(detail + '\n\nReset the console to its initial state?')) return;
+  Store.clearAll();
+  showToast('<span class="spin"></span>Restoring console to initial state…', 'info');
+  setTimeout(() => location.reload(), 500);
+}
+$('btnReset').addEventListener('click', resetConsole);
+
 $('btnEditRestore').addEventListener('click', () => {
   Store.set('hiddenPanels', []);
   applyHiddenPanels();
@@ -196,7 +210,8 @@ $('avatar').addEventListener('click', () => {
       <div><span>Tickets open</span><br><b>${TICKETS.length}</b></div>
       <div><span>Mail relay</span><br><b>${esc(MAIL.provider)}</b></div>
     </div>
-    <div class="hint" style="margin-top:10px;">All dashboard state (tickets, alerts, reports, settings) is stored in this browser only.</div>`;
+    <div class="hint" style="margin-top:10px;">All console state (tickets, alerts, reports, settings) is stored in this browser only.</div>
+    <div style="margin-top:12px;"><button class="btn secondary small" onclick="closeModal('infoModal');resetConsole();">&#8635; Reset console to initial state</button></div>`;
   openModal('infoModal');
 });
 
@@ -356,11 +371,7 @@ $('lnkClearTickets').addEventListener('click', () => {
   TICKETS = []; saveTickets(); renderTickets();
   showToast('Ticket queue cleared');
 });
-$('lnkResetAll').addEventListener('click', () => {
-  if(!confirm('Reset all saved settings, reports, alerts and tickets back to defaults?')) return;
-  Store.clearAll();
-  location.reload();
-});
+$('lnkResetAll').addEventListener('click', resetConsole);
 
 /* ---------------- modal plumbing ---------------- */
 $$('[data-close]').forEach(b => b.addEventListener('click', () => closeModal(b.dataset.close)));
@@ -381,6 +392,8 @@ renderTickets();
 renderBell();
 applyHiddenPanels();
 applyRefresh();
+startThroughput();
+startAlertCycle();
 $('cfgToEmail').value = MAIL.to;
 $('cfgCcEmail').value = MAIL.cc;
 $('cfgPriority').value = MAIL.priority;

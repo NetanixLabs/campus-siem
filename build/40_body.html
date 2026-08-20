@@ -14,7 +14,7 @@
     <a data-view="settings">Settings</a>
   </div>
   <div class="topbar-right">
-    <span><span class="live-dot"></span> data indexed</span>
+    <span title="Indexing throughput"><span class="live-dot"></span> data indexed <b id="epsRate" style="color:var(--green);font-weight:600;">&mdash;</b></span>
     <span id="clock"></span>
     <div class="bell-wrap" id="bellWrap" title="Notifications">
       &#128276;<span class="bell-badge" id="bellBadge">0</span>
@@ -67,6 +67,7 @@
       </div>
     </div>
     <button class="btn-edit" id="btnEdit">Edit</button>
+    <button class="btn-edit" id="btnReset" title="Clear tickets, alerts, reports and settings and restore the console to its initial state">&#8635; Reset</button>
   </div>
 </div>
 
