@@ -13,24 +13,30 @@
    user saves under Settings overrides these for that browser
    only (Settings -> Reset all saved settings clears it).
 
-   provider : 'formspree' | 'web3forms' | 'webhook' | 'none'
-   key      : Formspree  -> https://formspree.io/f/xxxxxxx
-              Web3Forms  -> your access key (a UUID)
-              webhook    -> the full https:// URL
-              none       -> leave blank; falls back to mailto:
-   to       : address shown as recipient / used as reply-to.
-              NOTE: Formspree and Web3Forms both deliver to the
-              mailbox the form or key was REGISTERED with — this
-              field rides along in the body and as reply-to.
+   provider : 'resend' | 'web3forms' | 'webhook' | 'none'
+   key      : Resend    -> leave blank; uses this site's own
+                           /api/send route, which reads
+                           RESEND_API_KEY from the environment
+              Web3Forms -> your access key (a UUID)
+              webhook   -> the full https:// URL
+              none      -> leave blank; falls back to mailto:
+   to       : recipient. Resend delivers here directly. Until a
+              domain is verified it must be the address the
+              Resend account was created with.
 --------------------------------------------------------- */
 const DEFAULT_MAIL = {
-  provider : 'formspree',
-  key      : 'https://formspree.io/f/xbgrwdpn',
+  provider : 'resend',
+  key      : '',
   to       : 'keedhecker@gmail.com',
   cc       : '',
   fromName : 'Campus SIEM',
   priority : 'medium'
 };
+
+/* Bump when DEFAULT_MAIL changes in a way that must win over whatever a
+   browser already has saved. Settings persist to localStorage, so without
+   this a returning visitor keeps the old provider forever. */
+const MAIL_CONFIG_VERSION = 2;
 /* ---------------  ▲▲▲  END EDIT BLOCK  ▲▲▲  --------------- */
 
 const C = {
@@ -507,35 +513,23 @@ function runSPL(query, opts){
 /* =========================================================
    Email delivery
 ========================================================= */
-let MAIL = Object.assign({}, DEFAULT_MAIL, Store.get('mail', {}));
+let MAIL = (function(){
+  const saved = Store.get('mail', null);
+  // Drop settings saved before this config version — they may name a provider
+  // that no longer exists, which would silently break sending.
+  if(!saved || Store.get('mailVersion', 1) < MAIL_CONFIG_VERSION){
+    Store.set('mailVersion', MAIL_CONFIG_VERSION);
+    Store.del('mail');
+    return Object.assign({}, DEFAULT_MAIL);
+  }
+  const merged = Object.assign({}, DEFAULT_MAIL, saved);
+  if(['resend','web3forms','webhook','none'].indexOf(merged.provider) === -1){
+    merged.provider = DEFAULT_MAIL.provider;
+    merged.key = DEFAULT_MAIL.key;
+  }
+  return merged;
+})();
 let PREFS = Object.assign({ refresh:0, pageSize:20, confirmEmail:true }, Store.get('prefs', {}));
-
-const PROVIDER_HINT = {
-  resend:
-    'Best output — a fully branded HTML incident report with no third-party wrapper or footer. ' +
-    'Sends through this site\'s own <b>/api/send</b> serverless function, so the API key stays on the server ' +
-    'and never reaches the browser. Set up: create a key at <a href="https://resend.com/api-keys" target="_blank" rel="noopener">resend.com/api-keys</a>, ' +
-    'then add it in Vercel under <b>Project → Settings → Environment Variables</b> as <b>RESEND_API_KEY</b> and redeploy. ' +
-    'No domain needed while you send to the address your Resend account was created with; to reach anyone else, ' +
-    'verify a domain at resend.com/domains. Free tier: 3,000 emails/month. Leave the endpoint field blank unless ' +
-    'your function lives somewhere other than /api/send.',
-  none:
-    'No relay configured. <b>Notify</b> and alert actions will open your mail client with the message pre-filled ' +
-    '(nothing is sent automatically). Pick a provider below to send real email straight from the page.',
-  formspree:
-    'Create a free form at <a href="https://formspree.io" target="_blank" rel="noopener">formspree.io</a> and paste its ' +
-    'endpoint, e.g. <b>https://formspree.io/f/abcdwxyz</b>. Formspree delivers to the mailbox the form was created with, ' +
-    'so set that to your SOC address; the <i>To</i> field below is recorded in the message body and used as reply-to. ' +
-    'Free tier allows 50 submissions/month.',
-  web3forms:
-    'Get a free access key at <a href="https://web3forms.com" target="_blank" rel="noopener">web3forms.com</a> ' +
-    '(no account needed — the key is emailed to you) and paste the key, e.g. <b>a1b2c3d4-...</b>. Web3Forms delivers to ' +
-    'the address the key was issued to. 250 submissions/month free, and the key is safe to expose in client-side code.',
-  webhook:
-    'POSTs the full alert as JSON to any URL you control — an n8n / Make / Zapier webhook, a Discord or Slack ' +
-    'incoming webhook, or your own endpoint. Body: <b>{to, cc, subject, body, priority, alert, row, sentAt}</b>. ' +
-    'The endpoint must send CORS headers allowing this origin.'
-};
 
 function mailConfigured(){
   if(MAIL.provider === 'none') return false;
@@ -546,8 +540,9 @@ function mailConfigured(){
 }
 
 function mailStateLabel(){
-  if(!mailConfigured()) return '✉️ delivery: not configured';
-  return `✉️ delivery: ${MAIL.provider}`;
+  return mailConfigured()
+    ? `&#9993; delivery: resend &rarr; ${esc(MAIL.to)}`
+    : '&#9993; delivery: not configured';
 }
 
 function mailtoFallback(to, cc, subject, body){
@@ -578,10 +573,6 @@ async function sendMail({ to, cc, subject, body, html, priority, meta }){
     // the API key never touches the browser — this hits our own
     // Vercel function, which holds RESEND_API_KEY server-side
     payload = { to, cc, subject, text: body, html: html || undefined, priority };
-  }else if(MAIL.provider === 'formspree'){
-    // Formspree renders every field it receives as a labelled block, so
-    // send exactly two: the subject it consumes, and the report itself.
-    payload = { _subject: subject, message: body };
   }else if(MAIL.provider === 'web3forms'){
     payload = {
       access_key: MAIL.key.trim(),

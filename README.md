@@ -44,22 +44,43 @@ before you save it.
 
 ## Sending real email
 
-The page is static, so outbound mail goes through a form-relay service. Pick one under
-**Settings → Email Delivery**, paste the endpoint, hit **Send Test Email**:
+Alert mail goes through **Resend**, called from this site's own `/api/send` serverless function.
+The API key is a server-side secret and is never shipped to the browser — that is the whole reason
+the function exists.
 
-| Provider | What to paste | Free tier |
-|---|---|---|
-| [Formspree](https://formspree.io) | `https://formspree.io/f/xxxxxxx` | 50 submissions/mo |
-| [Web3Forms](https://web3forms.com) | access key (a UUID; no account needed) | 250 submissions/mo |
-| Custom webhook | any URL — n8n, Make, Zapier, Discord, your own | yours |
+Set these in Vercel under **Project → Settings → Environment Variables**, then redeploy
+(env vars only apply to new deployments):
 
-Both hosted providers deliver to the mailbox the form or key was registered with, so register it
-with the address that should receive the alerts. The *To* field is carried in the message body and
-used as reply-to. A custom webhook receives the whole alert as JSON
-(`{to, cc, subject, body, priority, meta}`) and must allow CORS from this origin.
+| Variable | Value |
+|---|---|
+| `RESEND_API_KEY` | your key from [resend.com/api-keys](https://resend.com/api-keys) |
+| `ALERT_TO` | fallback recipient if the page sends none |
+| `ALERT_FROM` | `Campus SIEM <onboarding@resend.dev>` |
 
-With no provider configured nothing breaks — **Notify** falls back to opening your mail client with
-the message pre-filled, and the UI says so.
+**No domain is required** while the recipient is the address the Resend account was created with —
+Resend allows that for `onboarding@resend.dev`. To email anyone else, verify a domain at
+[resend.com/domains](https://resend.com/domains) and point `ALERT_FROM` at it.
+
+Free tier is 3,000 emails/month.
+
+There is nothing to configure in the UI: **Settings → Email Delivery** only sets the recipient,
+CC and default priority. If `/api/send` is unreachable the dashboard falls back to opening the
+mail client with the report pre-filled, and says so rather than failing silently.
+
+### What gets sent
+
+Every dispatch path — row **Notify**, an alert firing, the delivery self-test — produces the same
+incident report, as both branded HTML and a plain-text alternative:
+
+- Incident ID, severity, and a response-time target derived from it
+- What was detected, in prose
+- Evidence table built from the flagged row
+- Recommended actions, chosen per detection class (mass download, out-of-hours, DB admin access,
+  request bursts, auth failure) rather than a generic list
+- The originating index, sourcetype and search
+
+Set `ORG.console` in `build/55_report.js` to the deployed URL and every report also gains an
+**Open in Campus SIEM** button.
 
 ## Data and state
 
@@ -84,6 +105,7 @@ build/          the pieces it is assembled from
   40_body.html    markup for all five views
   20_data.js      aggregates parsed from campus_siem.log
   50_core.js      storage, event index, SPL engine, mail delivery
+  55_report.js    incident report builder (text + HTML email)
   60_views.js     dashboard, search, reports, alerts, settings, ticketing
   70_init.js      event wiring and boot
 build.sh        concatenates build/* back into index.html

@@ -1040,66 +1040,32 @@ function closeModal(id){ $(id).classList.remove('show'); }
    Settings
 ========================================================= */
 function fillSettings(){
-  $('setProvider').value = MAIL.provider;
-  $('setKey').value = MAIL.key;
   $('setTo').value = MAIL.to;
   $('setCc').value = MAIL.cc;
-  $('setFromName').value = MAIL.fromName;
   $('setPriority').value = MAIL.priority;
   $('setRefresh').value = String(PREFS.refresh);
   $('setPageSize').value = String(PREFS.pageSize);
   $('setConfirmEmail').checked = !!PREFS.confirmEmail;
-  updateProviderHint();
   const cnt = $('cntTickets'); if(cnt) cnt.textContent = `${TICKETS.length} tickets`;
 }
 
-function updateProviderHint(){
-  const p = $('setProvider').value;
-  $('setKeyHint').innerHTML = PROVIDER_HINT[p];
-  const labels = { none:'Endpoint (not used)', formspree:'Formspree endpoint URL', web3forms:'Web3Forms access key', webhook:'Webhook URL' };
-  const ph = { none:'—', formspree:'https://formspree.io/f/xxxxxxx', web3forms:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', webhook:'https://your-endpoint.example.com/hook' };
-  $('setKeyLabel').textContent = labels[p];
-  $('setKey').placeholder = ph[p];
-  $('setKey').disabled = p === 'none';
-}
-
-function validateMailCfg(){
-  const p = $('setProvider').value, k = $('setKey').value.trim();
-  if(p === 'none') return null;
-  if(p === 'resend'){
-    if(k && !/^\/|^https?:\/\//i.test(k)) return 'Leave blank to use <b>/api/send</b>, or give a full URL / absolute path.';
-    if(/^re_/.test(k)) return 'That looks like a Resend <b>API key</b>. Never put it here — it would ship in the page source. Add it in Vercel as <b>RESEND_API_KEY</b> and leave this field blank.';
-    return null;
-  }
-  if(!k) return 'Enter the endpoint or access key for ' + p + '.';
-  if(p === 'formspree' && !/^https:\/\/formspree\.io\/f\/\w+/.test(k))
-    return 'A Formspree endpoint looks like <b>https://formspree.io/f/abcdwxyz</b>.';
-  if(p === 'web3forms' && !/^[0-9a-f-]{20,}$/i.test(k))
-    return 'A Web3Forms access key is a long UUID, e.g. <b>a1b2c3d4-e5f6-...</b>';
-  if(p === 'webhook' && !/^https?:\/\//i.test(k))
-    return 'The webhook must be a full http(s) URL.';
-  return null;
-}
-
 function saveMailSettings(){
-  const err = validateMailCfg();
-  if(err){ setStatus('setStatus', err, 'err'); return false; }
-  MAIL = {
-    provider: $('setProvider').value,
-    key: $('setKey').value.trim(),
-    to: $('setTo').value.trim(),
-    cc: $('setCc').value.trim(),
-    fromName: $('setFromName').value.trim() || 'Campus SIEM',
-    priority: $('setPriority').value
-  };
+  const to = $('setTo').value.trim();
+  if(!to || to.indexOf('@') === -1){
+    setStatus('setStatus', 'Enter a valid recipient address.', 'err');
+    return false;
+  }
+  MAIL = Object.assign({}, MAIL, {
+    provider: 'resend', key: '',
+    to, cc: $('setCc').value.trim(), priority: $('setPriority').value
+  });
   Store.set('mail', MAIL);
+  Store.set('mailVersion', MAIL_CONFIG_VERSION);
   $('cfgToEmail').value = MAIL.to;
   $('cfgCcEmail').value = MAIL.cc;
   $('cfgPriority').value = MAIL.priority;
   $('alertEmailState').innerHTML = mailStateLabel();
-  setStatus('setStatus', mailConfigured()
-    ? `Saved. Alerts will be delivered through <b>${esc(MAIL.provider)}</b>.`
-    : 'Saved. No relay selected — alert actions will open your mail client.', 'ok');
+  setStatus('setStatus', `Saved. Incident mail will be delivered to <b>${esc(MAIL.to)}</b> via Resend.`, 'ok');
   return true;
 }
 

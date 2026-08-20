@@ -311,7 +311,6 @@ $('btnAlSave').addEventListener('click', () => {
 });
 
 /* ---------------- settings view ---------------- */
-$('setProvider').addEventListener('change', () => { updateProviderHint(); setStatus('setStatus',''); });
 $('btnSaveMail').addEventListener('click', saveMailSettings);
 $('btnTestMail').addEventListener('click', sendTestEmail);
 $('btnSavePrefs').addEventListener('click', savePrefs);

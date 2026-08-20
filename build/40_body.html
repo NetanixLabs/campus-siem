@@ -469,33 +469,17 @@
       <div class="set-panel" style="grid-column:1/-1;">
         <div class="panel-head">
           <div class="title">Email Delivery &mdash; Alert Actions</div>
-          <div class="head-right"><div class="tag">required for real email</div></div>
+          <div class="head-right"><div class="tag" id="mailRelayTag">resend &middot; server-side</div></div>
         </div>
         <div class="set-body">
           <div class="status-line info show" id="mailExplain">
-            This dashboard is a static site, so it hands outbound mail to a form-relay service. Create a free
-            endpoint, paste it below, and every <b>Notify</b> / alert action sends a real email.
+            Alert mail is sent through <b>Resend</b> by this deployment's own <b>/api/send</b> route, which reads
+            <b>RESEND_API_KEY</b> from the server environment. Nothing to configure here &mdash; no key is ever
+            stored in or sent from the browser.
           </div>
           <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="field">
-              <label>Provider</label>
-              <select id="setProvider">
-                <option value="resend">Resend &mdash; branded HTML report (recommended)</option>
-                <option value="none">Disabled &mdash; open mail client (mailto:)</option>
-                <option value="formspree">Formspree</option>
-                <option value="web3forms">Web3Forms</option>
-                <option value="webhook">Custom webhook (JSON POST)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label id="setKeyLabel">Endpoint / Access key</label>
-              <input type="text" id="setKey" placeholder="https://formspree.io/f/xxxxxxx" spellcheck="false">
-            </div>
-          </div>
-          <div class="hint" id="setKeyHint"></div>
-          <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div class="field">
-              <label>Default recipient (To)</label>
+              <label>Recipient (To)</label>
               <input type="email" id="setTo" placeholder="keedhecker@gmail.com">
             </div>
             <div class="field">
@@ -505,10 +489,6 @@
           </div>
           <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="field">
-              <label>From name</label>
-              <input type="text" id="setFromName" placeholder="Campus SIEM">
-            </div>
-            <div class="field">
               <label>Default priority</label>
               <select id="setPriority">
                 <option value="high">High</option>
@@ -516,6 +496,16 @@
                 <option value="low">Low</option>
               </select>
             </div>
+            <div class="field">
+              <label>Sender</label>
+              <input type="text" id="setFromName" value="Campus SIEM &lt;onboarding@resend.dev&gt;" disabled
+                     title="Set by the ALERT_FROM environment variable on the server">
+            </div>
+          </div>
+          <div class="hint">
+            Until a domain is verified at <a href="https://resend.com/domains" target="_blank" rel="noopener">resend.com/domains</a>,
+            Resend only delivers to the address the account was created with &mdash; so <b>Recipient</b> must be that address.
+            Verify a domain and set <b>ALERT_FROM</b> to reach anyone else.
           </div>
           <div class="status-line" id="setStatus"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
